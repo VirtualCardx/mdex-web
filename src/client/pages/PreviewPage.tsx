@@ -6,7 +6,7 @@
  * 那次解压刻意用 `includeAssetBytes: false`，只取正文与资源清单，图片字节一个都不进内存。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { parseMdex } from "../../shared/mdex";
@@ -27,22 +27,73 @@ export default function PreviewPage() {
   const { mode: marginMode, toggle: toggleMargin } = useMarginMode();
 
   const paneRef = useRef<HTMLDivElement | null>(null);
-  const progressRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
 
-  /** 触屏端阅读进度：部分国产内核的经典滚动条 thumb 位置计算有 bug，改用自绘进度条与内核实现解耦。 */
-  const updateProgress = useCallback(() => {
+  /** 同步右侧自绘滑块：高度=可视占比，位置=滚动比例；内容不可滚动时隐藏整条轨道。 */
+  const updateScrollbar = useCallback(() => {
     const pane = paneRef.current;
-    const bar = progressRef.current;
-    if (!pane || !bar) return;
+    const track = trackRef.current;
+    const thumb = thumbRef.current;
+    if (!pane || !track || !thumb) return;
     const max = pane.scrollHeight - pane.clientHeight;
-    const progress = max > 0 ? Math.min(1, Math.max(0, pane.scrollTop / max)) : 0;
-    bar.style.transform = `scaleX(${progress})`;
+    if (max <= 0) {
+      track.style.opacity = "0";
+      return;
+    }
+    track.style.opacity = "1";
+    const trackH = track.clientHeight;
+    const thumbH = Math.max(40, (pane.clientHeight / pane.scrollHeight) * trackH);
+    thumb.style.height = `${thumbH}px`;
+    thumb.style.transform = `translateY(${(pane.scrollTop / max) * (trackH - thumbH)}px)`;
   }, []);
 
-  // 正文加载/切换文档后校准一次（此时 scrollTop 通常已归零，防止残留上一篇文章的进度）
+  /**
+   * 拖拽/点按轨道快速定位：滑块中心跟随指针（与原生滚动条行为一致）。
+   * 部分国产内核的原生滚动条 thumb 位置计算有 bug，因此整个指示条自绘、与内核解耦。
+   */
+  const startDrag = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const pane = paneRef.current;
+    const thumb = thumbRef.current;
+    if (!pane || !thumb) return;
+    e.preventDefault();
+    const track = e.currentTarget;
+    track.setPointerCapture(e.pointerId);
+    const rect = track.getBoundingClientRect();
+
+    const apply = (clientY: number) => {
+      const max = pane.scrollHeight - pane.clientHeight;
+      if (max <= 0) return;
+      const travel = rect.height - thumb.offsetHeight;
+      const y = clientY - rect.top - thumb.offsetHeight / 2;
+      pane.scrollTop = Math.min(1, Math.max(0, y / travel)) * max;
+    };
+    apply(e.clientY);
+
+    const onMove = (ev: PointerEvent) => apply(ev.clientY);
+    const onUp = () => {
+      track.removeEventListener("pointermove", onMove);
+      track.removeEventListener("pointerup", onUp);
+      track.removeEventListener("pointercancel", onUp);
+    };
+    track.addEventListener("pointermove", onMove);
+    track.addEventListener("pointerup", onUp);
+    track.addEventListener("pointercancel", onUp);
+  }, []);
+
+  // 正文加载/切换文档后校准一次（防止残留上一篇文章的滑块状态）
   useEffect(() => {
-    updateProgress();
-  }, [updateProgress, markdown]);
+    updateScrollbar();
+  }, [updateScrollbar, markdown]);
+
+  // 视口或布局变化（如手机地址栏收起）时同步滑块几何
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateScrollbar);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [updateScrollbar]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -140,9 +191,14 @@ export default function PreviewPage() {
         </a>
       </header>
 
-      <div ref={paneRef} onScroll={updateProgress} className="preview-pane min-h-0 flex-1">
-        <div ref={progressRef} className="reading-progress" aria-hidden="true" />
-        <MarkdownView source={markdown} resolveAsset={resolveAsset} />
+      <div className="relative min-h-0 flex-1">
+        <div ref={paneRef} onScroll={updateScrollbar} className="preview-pane h-full">
+          <MarkdownView source={markdown} resolveAsset={resolveAsset} />
+        </div>
+        {/* 自绘滚动条覆盖层：与滚动容器平级，不随内容滚动；拖拽逻辑见 startDrag */}
+        <div ref={trackRef} className="md-scrollbar" aria-hidden="true" onPointerDown={startDrag}>
+          <div ref={thumbRef} className="md-scrollbar-thumb" />
+        </div>
       </div>
     </div>
   );

@@ -140,7 +140,7 @@ body {
 
 /* 触屏设备上滚动条不占布局空间：自定义 ::-webkit-scrollbar 会强制 Chromium 渲染占位的
    经典滚动条，而部分国产内核对 thumb 位置的计算有 bug（内容没滚完 thumb 先到底）。
-   因此触屏隐藏原生滚动条，阅读进度改由 PreviewPage 自绘的 .reading-progress 呈现。 */
+   因此触屏隐藏原生滚动条，阅读进度改由 PreviewPage 自绘的 .md-scrollbar 呈现。 */
 @media (hover: none) and (pointer: coarse) {
   .preview-pane {
     scrollbar-width: none;
@@ -151,22 +151,34 @@ body {
   }
 }
 
-/* 手机端阅读进度条：sticky 钉在预览面板顶部，scaleX 按滚动比例填充（PreviewPage 每次滚动更新）。
-   桌面端有真实滚动条，不重复显示。 */
-.reading-progress {
-  position: sticky;
+/* 手机端右侧滚动指示条：模拟滑块，点按/拖拽 track 可快速定位（逻辑在 PreviewPage）。
+   覆盖层是滚动容器的兄弟节点，不随内容滚动；桌面端有真实滚动条，整层隐藏。 */
+.md-scrollbar {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  bottom: 4px;
+  width: 14px;
+  z-index: 20;
+  opacity: 0; /* 由 JS 依据内容是否可滚动置 1 */
+  touch-action: none; /* 拖拽滑块时不让浏览器接管触摸手势 */
+  user-select: none;
+}
+
+.md-scrollbar-thumb {
+  position: absolute;
   top: 0;
-  z-index: 10;
-  height: 3px;
-  width: 100%;
-  background: var(--accent);
-  transform-origin: 0 50%;
-  transform: scaleX(0);
-  pointer-events: none;
+  right: 5px;
+  width: 4px;
+  height: 40px; /* JS 会按内容比例覆盖 */
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.9;
+  transform: translateY(0);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .reading-progress {
+  .md-scrollbar {
     display: none;
   }
 }
