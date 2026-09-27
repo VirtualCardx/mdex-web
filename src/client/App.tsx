@@ -97,7 +97,7 @@ function ProtectedLayout() {
 
   if (session === "checking") {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg text-sm text-muted">
+      <div className="app-shell flex items-center justify-center bg-bg text-sm text-muted">
         正在检查登录状态…
       </div>
     );
@@ -119,7 +119,7 @@ function ProtectedLayout() {
 
   return (
     <ToastProvider>
-      <div className="flex h-screen min-h-0 flex-col bg-bg">
+      <div className="app-shell flex min-h-0 flex-col bg-bg">
         <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
           <Link to="/" className="text-sm font-semibold text-heading">
             MDexWeb

@@ -96,6 +96,27 @@ body,
   height: 100%;
 }
 
+/*
+ * 页面本身永不滚动：滚动只发生在内部容器（列表页的 main、预览页的 .preview-pane）。
+ * 否则手机上会出现「页面滚动条 + 正文滚动条」双层嵌套，正文的自绘滑块轨道按
+ * 应用外壳高度定位，超出屏幕的部分会把滑块挡在视口外。
+ */
+html,
+body {
+  overflow: hidden;
+}
+
+/*
+ * 应用外壳高度必须用 dvh（动态视口高度）：100vh 是「地址栏收起后」的高度，
+ * 手机上地址栏可见时 100vh 高于实际可视区，会撑出页面级滚动条。
+ * 保留 vh 一行作为不支持 dvh 的旧浏览器的回退。
+ */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: var(--font-ui);
@@ -136,6 +157,52 @@ body {
   scrollbar-gutter: stable both-edges;
   background: var(--bg-panel);
   user-select: text;
+}
+
+/* 触屏设备上滚动条不占布局空间：自定义 ::-webkit-scrollbar 会强制 Chromium 渲染占位的
+   经典滚动条，而部分国产内核对 thumb 位置的计算有 bug（内容没滚完 thumb 先到底）。
+   因此触屏隐藏原生滚动条，阅读进度改由 PreviewPage 自绘的 .md-scrollbar 呈现。 */
+@media (hover: none) and (pointer: coarse) {
+  .preview-pane {
+    scrollbar-width: none;
+  }
+
+  .preview-pane::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 手机端右侧滚动指示条：模拟滑块，点按/拖拽 track 可快速定位（逻辑在 PreviewPage）。
+   覆盖层是滚动容器的兄弟节点，不随内容滚动；桌面端有真实滚动条，整层隐藏。 */
+.md-scrollbar {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  bottom: 4px;
+  width: 14px;
+  z-index: 20;
+  opacity: 0; /* 由 JS 依据内容是否可滚动置 1 */
+  touch-action: none; /* 拖拽滑块时不让浏览器接管触摸手势 */
+  user-select: none;
+}
+
+.md-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 5px;
+  width: 4px;
+  height: 40px; /* JS 会按内容比例覆盖 */
+  border-radius: 2px;
+  /* accent 蓝兼作版本标记：与旧版原生滚动条（灰色）一眼区分 */
+  background: var(--accent);
+  opacity: 0.9;
+  transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .md-scrollbar {
+    display: none;
+  }
 }
 
 /* ---------- 正文排版（移植参考实现，选择器已调好，不要改写） ---------- */

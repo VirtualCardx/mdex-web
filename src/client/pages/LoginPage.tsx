@@ -44,7 +44,7 @@ export default function LoginPage() {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">
+      <div className="app-shell flex items-center justify-center bg-bg text-sm text-muted">
         正在检查登录状态…
       </div>
     );
@@ -67,7 +67,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+    // 软键盘弹出会压缩 dvh，overflow-y-auto 保证表单仍可滚到可见区域
+    <div className="app-shell flex items-center justify-center overflow-y-auto bg-bg px-4">
       <form
         onSubmit={onSubmit}
         className="w-full max-w-sm rounded-2xl border border-line bg-panel p-6 shadow-xl"
