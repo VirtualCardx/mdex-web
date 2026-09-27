@@ -62,7 +62,7 @@
   }
 
   :root[data-margin="narrow"] {
-    --md-body-padding-x: 8px;
+    --md-body-padding-x: 12px;
   }
 }
 
@@ -138,15 +138,21 @@ body {
   user-select: text;
 }
 
-/* 触屏设备上滚动条不占布局空间（防止个别内核渲染成经典滚动条挤占边距），
-   滑动手势本身不受影响；桌面端仍保留可见滚动条。 */
+/* 触屏设备上显示 4px 细滚动条，作为阅读进度指示。
+   注意 ::-webkit-scrollbar 一旦有样式，Chromium 会把它渲染成占布局空间的经典滚动条，
+   正好配合 .preview-pane 的 scrollbar-gutter: stable both-edges：两侧对称让出等宽槽位，
+   左右边距依旧对称，细条只占 4px，对正文宽度的影响可控。
+   iOS 等采用 overlay 滚动条的平台会忽略自定义样式，滚动时以浮层形式显示，同样有指示。 */
 @media (hover: none) and (pointer: coarse) {
-  .preview-pane {
-    scrollbar-width: none;
+  .preview-pane::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
 
-  .preview-pane::-webkit-scrollbar {
-    display: none;
+  /* 全局 thumb 自带 2px 透明边框（background-clip: content-box），4px 宽下会完全不可见 */
+  .preview-pane::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border: 0;
   }
 }
 
