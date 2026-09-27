@@ -138,21 +138,36 @@ body {
   user-select: text;
 }
 
-/* 触屏设备上显示 4px 细滚动条，作为阅读进度指示。
-   注意 ::-webkit-scrollbar 一旦有样式，Chromium 会把它渲染成占布局空间的经典滚动条，
-   正好配合 .preview-pane 的 scrollbar-gutter: stable both-edges：两侧对称让出等宽槽位，
-   左右边距依旧对称，细条只占 4px，对正文宽度的影响可控。
-   iOS 等采用 overlay 滚动条的平台会忽略自定义样式，滚动时以浮层形式显示，同样有指示。 */
+/* 触屏设备上滚动条不占布局空间：自定义 ::-webkit-scrollbar 会强制 Chromium 渲染占位的
+   经典滚动条，而部分国产内核对 thumb 位置的计算有 bug（内容没滚完 thumb 先到底）。
+   因此触屏隐藏原生滚动条，阅读进度改由 PreviewPage 自绘的 .reading-progress 呈现。 */
 @media (hover: none) and (pointer: coarse) {
-  .preview-pane::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+  .preview-pane {
+    scrollbar-width: none;
   }
 
-  /* 全局 thumb 自带 2px 透明边框（background-clip: content-box），4px 宽下会完全不可见 */
-  .preview-pane::-webkit-scrollbar-thumb {
-    background: var(--muted);
-    border: 0;
+  .preview-pane::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 手机端阅读进度条：sticky 钉在预览面板顶部，scaleX 按滚动比例填充（PreviewPage 每次滚动更新）。
+   桌面端有真实滚动条，不重复显示。 */
+.reading-progress {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 3px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .reading-progress {
+    display: none;
   }
 }
 

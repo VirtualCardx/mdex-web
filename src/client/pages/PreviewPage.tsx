@@ -6,7 +6,7 @@
  * 那次解压刻意用 `includeAssetBytes: false`，只取正文与资源清单，图片字节一个都不进内存。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { parseMdex } from "../../shared/mdex";
@@ -25,6 +25,24 @@ export default function PreviewPage() {
   const [markdown, setMarkdown] = useState("");
   const [assetKeys, setAssetKeys] = useState<string[]>([]);
   const { mode: marginMode, toggle: toggleMargin } = useMarginMode();
+
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+
+  /** 触屏端阅读进度：部分国产内核的经典滚动条 thumb 位置计算有 bug，改用自绘进度条与内核实现解耦。 */
+  const updateProgress = useCallback(() => {
+    const pane = paneRef.current;
+    const bar = progressRef.current;
+    if (!pane || !bar) return;
+    const max = pane.scrollHeight - pane.clientHeight;
+    const progress = max > 0 ? Math.min(1, Math.max(0, pane.scrollTop / max)) : 0;
+    bar.style.transform = `scaleX(${progress})`;
+  }, []);
+
+  // 正文加载/切换文档后校准一次（此时 scrollTop 通常已归零，防止残留上一篇文章的进度）
+  useEffect(() => {
+    updateProgress();
+  }, [updateProgress, markdown]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,7 +140,8 @@ export default function PreviewPage() {
         </a>
       </header>
 
-      <div className="preview-pane min-h-0 flex-1">
+      <div ref={paneRef} onScroll={updateProgress} className="preview-pane min-h-0 flex-1">
+        <div ref={progressRef} className="reading-progress" aria-hidden="true" />
         <MarkdownView source={markdown} resolveAsset={resolveAsset} />
       </div>
     </div>
