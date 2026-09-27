@@ -52,6 +52,21 @@
 }
 
 /*
+ * 手机等窄屏：两侧留白再收一档。桌面端的 40/20 在小屏上占比太大（390px 视口下
+ * 窄边距也只剩 ~350px 正文），这里按视口宽度覆盖；必须放在 data-margin 块之后，
+ * 两者选择器优先级相同，靠后者胜出。
+ */
+@media (max-width: 640px) {
+  :root {
+    --md-body-padding-x: 16px;
+  }
+
+  :root[data-margin="narrow"] {
+    --md-body-padding-x: 8px;
+  }
+}
+
+/*
  * 把这套变量注册给 Tailwind，让外壳布局直接用 `bg-panel` / `text-muted` 这类工具类。
  *
  * 关键是 `inline`：不加它，Tailwind 会生成 `--color-fg: var(--fg)` 并把工具类指向
