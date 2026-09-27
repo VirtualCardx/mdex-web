@@ -86,12 +86,17 @@ export default function PreviewPage() {
     updateScrollbar();
   }, [updateScrollbar, markdown]);
 
-  // 视口或布局变化（如手机地址栏收起）时同步滑块几何
+  // 视口或内容几何变化时同步滑块：pane 自身覆盖地址栏收起等情况；
+  // 还要观察内容元素（.md-body）——图片/KaTeX 字体延迟加载只改变内容高度、
+  // 不改变 pane 尺寸，若不观察它，滑块会停驻在按旧 scrollHeight 算出的
+  // 偏下位置，表现为「文章没读完滑块先到底」。
   useEffect(() => {
     const pane = paneRef.current;
     if (!pane || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(updateScrollbar);
     observer.observe(pane);
+    const content = pane.firstElementChild;
+    if (content) observer.observe(content);
     return () => observer.disconnect();
   }, [updateScrollbar]);
 
