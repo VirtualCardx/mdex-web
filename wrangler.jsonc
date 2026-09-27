@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mdexweb",
+  "compatibility_date": "2026-09-25",
+  "main": "./src/worker/index.ts",
+  "assets": {
+    // 用 @cloudflare/vite-plugin 时不要写 directory，构建输出会自动指向 client 产物
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mdexweb",
+      // 部署前必须替换成 `wrangler d1 create mdexweb` 回显的真实 ID
+      "database_id": "ca9f2787-fd34-43a7-9094-a24a5dc98dad",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "mdexweb-docs" }],
+  "vars": {
+    "MAX_UPLOAD_MB": "32"
+  },
+  "observability": { "enabled": true }
+}

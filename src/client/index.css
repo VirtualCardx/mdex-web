@@ -1,0 +1,305 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   设计令牌：直接移植参考实现 `mdex\src\styles.css`。
+   明暗两套值用同一个 `data-theme` 属性切换（挂在 <html> 上）。
+   --------------------------------------------------------------------------- */
+
+:root {
+  --bg: #14161b;
+  --bg-panel: #1a1d24;
+  --bg-raised: #20242d;
+  --fg: #d7dae2;
+  --heading: #eceef4;
+  --fg-soft: #b7bdc9;
+  --muted: #8a91a3;
+  --accent: #7c8cff;
+  --accent-soft: rgba(124, 140, 255, 0.14);
+  --border: #2a2f3a;
+  --code: #e0b078;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --shadow: rgba(0, 0, 0, 0.45);
+  /* 预览正文的左右边距，由 <html data-margin> 切换（见 lib/marginPref.ts） */
+  --md-body-max-width: 840px;
+  --md-body-padding-x: 40px;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f7f8fa;
+  --bg-panel: #ffffff;
+  --bg-raised: #e8ebf1;
+  --fg: #1f242c;
+  --heading: #0e1116;
+  --fg-soft: #3c444e;
+  --muted: #525c68;
+  --accent: #4f5ad1;
+  --accent-soft: rgba(79, 90, 209, 0.1);
+  --border: #d2d7de;
+  --code: #9a4a1b;
+  --shadow: rgba(30, 34, 40, 0.18);
+  color-scheme: light;
+}
+
+/*
+ * 窄边距：正文列变宽、两侧留白收窄。与 data-theme 相互独立，因此单独成块。
+ * 只覆盖这两个布局变量，颜色令牌不受影响。
+ */
+:root[data-margin="narrow"] {
+  --md-body-max-width: 1160px;
+  --md-body-padding-x: 20px;
+}
+
+/*
+ * 把这套变量注册给 Tailwind，让外壳布局直接用 `bg-panel` / `text-muted` 这类工具类。
+ *
+ * 关键是 `inline`：不加它，Tailwind 会生成 `--color-fg: var(--fg)` 并把工具类指向
+ * `var(--color-fg)`，而该变量在 :root 上就已解析完毕，之后在 [data-theme] 上覆盖 `--fg`
+ * 根本不会生效（自定义属性在「声明它的元素」上求值，继承下去的是已解析的结果）。
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--bg-panel);
+  --color-raised: var(--bg-raised);
+  --color-fg: var(--fg);
+  --color-heading: var(--heading);
+  --color-soft: var(--fg-soft);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-line: var(--border);
+  --color-code: var(--code);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ---------- CodeMirror 宿主（编辑器主题在 Editor.tsx 里用 EditorView.theme 定义） ---------- */
+
+.editor-host,
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+.editor-host .cm-scroller {
+  overflow-y: auto;
+  user-select: text;
+}
+
+/* ---------- 只读预览滚动容器 ---------- */
+
+.preview-pane {
+  height: 100%;
+  /*
+   * 只声明 overflow-y 时，overflow-x 会按规范计算成 auto：正文里一旦出现不可收缩的
+   * 宽元素（行内公式、raw HTML 等），面板就会被撑出横向滚动；移动端横向一滑，
+   * 左 padding 被滚出视口而右 padding 还在，看起来就是「左右边距不对称」。
+   * hidden 保证触摸无法横向滑动（触控只作用于可滚动轴）。
+   * 注意这里不能用 clip：同元素另一轴是 auto 时，clip 会被强制计算成 hidden。
+   */
+  overflow-x: hidden;
+  overflow-y: auto;
+  /*
+   * 经典滚动条（Windows 桌面 Chrome，以及少数安卓内核/WebView）会在右侧预留
+   * 滚动条槽，把正文挤左，右边距看起来比左边宽。both-edges 让两侧对称预留；
+   * overlay 滚动条（iOS / 大部分安卓）本就不占空间，此声明是空操作。
+   */
+  scrollbar-gutter: stable both-edges;
+  background: var(--bg-panel);
+  user-select: text;
+}
+
+/* 触屏设备上滚动条不占布局空间（防止个别内核渲染成经典滚动条挤占边距），
+   滑动手势本身不受影响；桌面端仍保留可见滚动条。 */
+@media (hover: none) and (pointer: coarse) {
+  .preview-pane {
+    scrollbar-width: none;
+  }
+
+  .preview-pane::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ---------- 正文排版（移植参考实现，选择器已调好，不要改写） ---------- */
+
+.md-body {
+  max-width: var(--md-body-max-width);
+  margin: 0 auto;
+  padding: 30px var(--md-body-padding-x) 40vh;
+  overflow-wrap: break-word;
+  /*
+   * 在源头裁掉横向溢出：正文里不可收缩的宽元素（行内公式、raw HTML 等）若被
+   * 放任溢出，会把 .preview-pane 撑出横向滚动，移动端横向一滑左 padding 就被
+   * 滚出视口，表现为「左右边距不对称」。这里的 y 轴是 visible，与 clip 合法
+   * 共存（pane 上不行——另一轴是 auto 时 clip 会被算成 hidden）；不支持 clip
+   * 的旧浏览器丢弃该声明，由 pane 的 overflow-x: hidden 兜底。
+   */
+  overflow-x: clip;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  color: var(--heading);
+  line-height: 1.3;
+  margin: 1.35em 0 0.55em;
+  font-weight: 700;
+}
+
+.md-body h1 {
+  font-size: 1.9em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+
+.md-body h2 {
+  font-size: 1.45em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25em;
+}
+
+.md-body h3 {
+  font-size: 1.2em;
+}
+
+.md-body p {
+  margin: 0.75em 0;
+  line-height: 1.75;
+}
+
+.md-body a {
+  color: var(--accent);
+}
+
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.md-body pre {
+  background: #0d1117;
+  border-radius: 8px;
+  padding: 14px 18px;
+  overflow: auto;
+  line-height: 1.5;
+}
+
+.md-body pre code {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: #e6edf3;
+  font-size: 13px;
+}
+
+.md-body blockquote {
+  margin: 1em 0;
+  padding: 2px 18px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 6px 6px 0;
+  color: var(--fg-soft);
+}
+
+.md-body blockquote p {
+  margin: 0.5em 0;
+}
+
+.md-body table {
+  border-collapse: collapse;
+  margin: 1.1em 0;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+
+.md-body th,
+.md-body td {
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+}
+
+.md-body th {
+  background: var(--bg-raised);
+  font-weight: 600;
+}
+
+.md-body img {
+  max-width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--muted);
+  opacity: 0.45;
+  margin: 2.2em 0;
+}
+
+.md-body input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin-right: 6px;
+}
+
+.md-body li {
+  line-height: 1.7;
+  margin: 0.25em 0;
+}
+
+.md-body ul.contains-task-list,
+.md-body li.task-list-item {
+  list-style: none;
+}
+
+.md-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+/* ---------- 滚动条 ---------- */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
