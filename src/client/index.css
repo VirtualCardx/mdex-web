@@ -172,7 +172,8 @@ body {
   width: 4px;
   height: 40px; /* JS 会按内容比例覆盖 */
   border-radius: 2px;
-  background: var(--muted);
+  /* accent 蓝兼作版本标记：与旧版原生滚动条（灰色）一眼区分 */
+  background: var(--accent);
   opacity: 0.9;
   transform: translateY(0);
 }
