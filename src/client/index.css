@@ -117,6 +117,16 @@ body {
   overflow: hidden;
 }
 
+/*
+ * 沉浸式阅读：预览页开关打开时由 PreviewPage 在 <html> 上写 data-immersive="on"，
+ * 隐去应用顶栏（.app-chrome）与预览页工具条（.page-chrome），把纵向空间全留给正文。
+ * 退出入口是预览页右下角常驻的悬浮按钮，不依赖被隐藏的顶栏。
+ */
+:root[data-immersive="on"] .app-chrome,
+:root[data-immersive="on"] .page-chrome {
+  display: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font-ui);

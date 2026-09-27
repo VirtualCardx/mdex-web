@@ -120,7 +120,7 @@ function ProtectedLayout() {
   return (
     <ToastProvider>
       <div className="app-shell flex min-h-0 flex-col bg-bg">
-        <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
+        <header className="app-chrome flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
           <Link to="/" className="text-sm font-semibold text-heading">
             MDexWeb
           </Link>

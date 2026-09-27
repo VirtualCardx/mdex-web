@@ -24,6 +24,7 @@ export default function PreviewPage() {
   const [doc, setDoc] = useState<DocSummary | null>(null);
   const [markdown, setMarkdown] = useState("");
   const [assetKeys, setAssetKeys] = useState<string[]>([]);
+  const [immersive, setImmersive] = useState(false);
   const { mode: marginMode, toggle: toggleMargin } = useMarginMode();
 
   const paneRef = useRef<HTMLDivElement | null>(null);
@@ -100,6 +101,40 @@ export default function PreviewPage() {
     return () => observer.disconnect();
   }, [updateScrollbar]);
 
+  /**
+   * 沉浸式阅读。原生全屏必须在点击手势的瞬时活化窗口内**同步**发起，
+   * 因此放在事件回调里而不是 useEffect（后者会推迟到渲染后，可能被浏览器拒绝）。
+   * iOS Safari 不提供 Element.requestFullscreen，可选链会静默跳过，退化为纯应用内沉浸。
+   */
+  const enterImmersive = useCallback(() => {
+    void document.documentElement.requestFullscreen?.().catch(() => {});
+    setImmersive(true);
+  }, []);
+
+  const exitImmersive = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    setImmersive(false);
+  }, []);
+
+  // data-immersive 驱动 CSS 隐藏顶栏；离开页面时清掉属性，避免影响其他页面
+  useEffect(() => {
+    const root = document.documentElement;
+    if (immersive) root.dataset.immersive = "on";
+    else delete root.dataset.immersive;
+    return () => {
+      delete root.dataset.immersive;
+    };
+  }, [immersive]);
+
+  // 用户用系统手势/Esc 退出原生全屏时，同步关掉沉浸态
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setImmersive(false);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -160,7 +195,7 @@ export default function PreviewPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
+      <header className="page-chrome flex flex-wrap items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
         <Link to="/" className="text-sm text-muted transition-colors hover:text-accent">
           ← 返回列表
         </Link>
@@ -180,6 +215,14 @@ export default function PreviewPage() {
           {/* 文字按钮按约定显示**点击后会发生什么**（目标状态），当前状态由 aria-pressed 表达。
               旁边的主题按钮是图标，读作「当前模式」，两者语义不同，不要照搬。 */}
           {marginMode === "narrow" ? "正常边距" : "窄边距"}
+        </button>
+        <button
+          type="button"
+          onClick={enterImmersive}
+          title="全屏阅读（隐去顶部导航栏）"
+          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+        >
+          全屏
         </button>
         <Link
           to={`/d/${doc.id}/edit`}
@@ -204,6 +247,17 @@ export default function PreviewPage() {
         <div ref={trackRef} className="md-scrollbar" aria-hidden="true" onPointerDown={startDrag}>
           <div ref={thumbRef} className="md-scrollbar-thumb" />
         </div>
+        {/* 沉浸态下的唯一退出入口：顶栏已被隐藏，这个悬浮按钮必须常驻可见 */}
+        {immersive && (
+          <button
+            type="button"
+            onClick={exitImmersive}
+            title="退出全屏阅读"
+            className="absolute right-4 top-3 z-30 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-fg shadow-lg transition-colors hover:bg-raised"
+          >
+            退出全屏
+          </button>
+        )}
       </div>
     </div>
   );
