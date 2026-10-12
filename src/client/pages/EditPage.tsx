@@ -534,7 +534,7 @@ export default function EditPage() {
       {isMobile ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div
-            className={`editor-pane min-h-0 flex-1 bg-bg ${mobileTab === "edit" ? "" : "hidden"}`}
+            className={`editor-pane relative z-0 min-h-0 flex-1 overflow-hidden bg-bg ${mobileTab === "edit" ? "" : "hidden"}`}
           >
             {editorPane}
           </div>
@@ -571,7 +571,10 @@ export default function EditPage() {
         onChange={(event) => void handleImageFile(event)}
       />
 
-      <footer className="flex flex-wrap items-center gap-4 border-t border-line bg-panel px-4 py-1.5 text-xs text-muted">
+      {/* relative+z-10：CodeMirror 内部有定位图层，窗格内容若溢出到页脚区域，
+          静态定位的页脚会被压在文字下面（手机键盘弹出、可视区压扁时尤其明显）。
+          提升页脚的绘制层级，配合编辑器窗格的 z-0 层叠上下文，状态栏永远在正文之上。 */}
+      <footer className="relative z-10 flex flex-wrap items-center gap-4 border-t border-line bg-panel px-4 py-1.5 text-xs text-muted">
         <span>
           Ln {cursor.ln}, Col {cursor.col}
         </span>
