@@ -6,7 +6,15 @@
  * 那次解压刻意用 `includeAssetBytes: false`，只取正文与资源清单，图片字节一个都不进内存。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { parseMdex } from "../../shared/mdex";
@@ -34,6 +42,12 @@ export default function PreviewPage() {
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLElement | null>(null);
   const lastScrollTop = useRef(0);
+  /**
+   * 工具条是否可见。窄屏初始为 false——打开文档即是沉浸阅读；桌面端由 effect 置 true。
+   * 用 ref 不用 state：滚动时每次方向变化都要读它，走 state 就会反复重渲染整篇正文。
+   */
+  const chromeVisible = useRef(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   /** 同步右侧自绘滑块：高度=可视占比，位置=滚动比例；内容不可滚动时隐藏整条轨道。 */
   const updateScrollbar = useCallback(() => {
@@ -53,33 +67,50 @@ export default function PreviewPage() {
     thumb.style.transform = `translateY(${(pane.scrollTop / max) * (trackH - thumbH)}px)`;
   }, []);
 
+  /** 把 chromeVisible 落到 DOM 上：可见时写 data-hidden="false"，否则移除属性。
+   *  CSS 在窄屏下默认就是收起的（`.page-chrome` 带 translateY(-100%)），
+   *  所以「隐藏」靠删除属性而不是显式设 true，首帧才不会闪一下完整工具条。 */
+  const applyChrome = useCallback(() => {
+    const bar = toolbarRef.current;
+    if (!bar) return;
+    if (chromeVisible.current) bar.dataset.hidden = "false";
+    else delete bar.dataset.hidden;
+  }, []);
+
+  /** 点击正文切换工具条。手机上这是唤出/收起入口的唯一方式。 */
+  const toggleChrome = useCallback(() => {
+    chromeVisible.current = !chromeVisible.current;
+    applyChrome();
+  }, [applyChrome]);
+
   /**
-   * 手机端把工具栏变成浮在正文上方的浮层：向下读时滑走、向上滚或回到顶部时滑回。
-   * 同时把工具栏高度写进 `--mobile-chrome-h`，让正文顶部留出等高的空白
-   * （见 index.css 的 `.md-body` 规则），否则第一屏会被浮层压住。
-   *
-   * 这里直接改 DOM 而不是走 state：滚动事件每秒触发几十次，重渲染整篇 Markdown
-   * 的代价太大；与上面 `updateScrollbar` 是同一套做法。
+   * 手机端工具条是浮在正文上方的浮层，向下读时滑走。它由用户点击唤出
+   * （见 toggleChrome），滚动只负责收起——不因滚动方向自动弹出，
+   * 否则「打开即沉浸」就维持不住。
    */
   const updateChrome = useCallback(() => {
     const pane = paneRef.current;
-    const bar = toolbarRef.current;
-    if (!pane || !bar) return;
-
+    if (!pane) return;
     const top = pane.scrollTop;
     const prev = lastScrollTop.current;
     lastScrollTop.current = top;
-    // 6px 阈值：手指轻微回弹不该让工具栏闪一下
-    if (top <= 4) bar.dataset.hidden = "false";
-    else if (top - prev > 6) bar.dataset.hidden = "true";
-    else if (prev - top > 6) bar.dataset.hidden = "false";
-
-    // 工具栏被沉浸态隐藏时 offsetHeight 为 0，留白也随之收掉，无需特判
-    const clearance = `${bar.offsetHeight}px`;
-    if (pane.style.getPropertyValue("--mobile-chrome-h") !== clearance) {
-      pane.style.setProperty("--mobile-chrome-h", clearance);
+    // 6px 阈值：手指轻微回弹不该让工具条闪一下
+    if (chromeVisible.current && top - prev > 6) {
+      chromeVisible.current = false;
+      applyChrome();
+      setMoreOpen(false);
     }
-  }, []);
+  }, [applyChrome]);
+
+  /** 点正文空白处唤出/收起工具条；点在链接、按钮上时不动——那是用户的真实意图。 */
+  const handlePaneClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isMobile) return;
+      if ((event.target as HTMLElement).closest("a, button, input, textarea, select")) return;
+      toggleChrome();
+    },
+    [isMobile, toggleChrome],
+  );
 
   /** 一次滚动要同时维护滑块与顶栏，合起来给 onScroll / 观察者调用。 */
   const syncPane = useCallback(() => {
@@ -175,16 +206,18 @@ export default function PreviewPage() {
     };
   }, [isMobile]);
 
-  // 退出沉浸态时把工具栏叫回来并重算留白：否则停在文档中段会看不到任何入口
+  // 桌面端工具条常驻；窄屏默认收起，打开文档即是沉浸阅读。
+  // 也覆盖了窗口在两者间跨断点缩放的情况。
+  useEffect(() => {
+    chromeVisible.current = !isMobile;
+    lastScrollTop.current = paneRef.current?.scrollTop ?? 0;
+    applyChrome();
+  }, [isMobile, applyChrome]);
+
+  // 退出沉浸态时把滚动基准对齐当前值，避免带着旧的 scrollTop 做方向判断
   useEffect(() => {
     if (immersive) return;
-    const pane = paneRef.current;
-    const bar = toolbarRef.current;
-    lastScrollTop.current = pane?.scrollTop ?? 0;
-    if (bar && pane) {
-      bar.dataset.hidden = "false";
-      pane.style.setProperty("--mobile-chrome-h", `${bar.offsetHeight}px`);
-    }
+    lastScrollTop.current = paneRef.current?.scrollTop ?? 0;
   }, [immersive]);
 
   // 用户用系统手势/Esc 退出原生全屏时，同步关掉沉浸态
@@ -258,66 +291,86 @@ export default function PreviewPage() {
     <div className="relative flex h-full min-h-0 flex-col">
       <header
         ref={toolbarRef}
-        className="page-chrome flex flex-wrap items-center gap-3 border-b border-line bg-panel px-4 py-2.5"
+        className="page-chrome flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-2.5"
       >
-        <Link to="/" className="text-sm text-muted transition-colors hover:text-accent">
+        <Link to="/" className="tap-target text-sm text-muted transition-colors hover:text-accent">
           ← 返回列表
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-heading" title={doc.title}>
           {doc.title || "未命名文档"}
         </h1>
-        <span className="text-xs text-muted">
-          rev {doc.rev} · {doc.assetCount} 个资源
-        </span>
-        <button
-          type="button"
-          onClick={toggleMargin}
-          aria-pressed={marginMode === "narrow"}
-          title={marginMode === "narrow" ? "切换为正常边距" : "切换为窄边距"}
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
-        >
-          {/* 文字按钮按约定显示**点击后会发生什么**（目标状态），当前状态由 aria-pressed 表达。
-              旁边的主题按钮是图标，读作「当前模式」，两者语义不同，不要照搬。 */}
-          {marginMode === "narrow" ? "正常边距" : "窄边距"}
-        </button>
-        <button
-          type="button"
-          onClick={enterImmersive}
-          title="全屏阅读（隐去顶部导航栏）"
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
-        >
-          全屏
-        </button>
-        <Link
-          to={`/d/${doc.id}/edit`}
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
-        >
-          编辑
-        </Link>
-        <a
-          href={rawUrl(doc.id)}
-          download={`${doc.title || "document"}.mdex`}
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
-        >
-          下载
-        </a>
+        {/* 窄屏先把次要操作收起来，工具条保持单行、尽量少占纵向空间 */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setMoreOpen((value) => !value)}
+            aria-expanded={moreOpen}
+            aria-label="更多操作"
+            title="更多操作"
+            className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+          >
+            ⋯
+          </button>
+        )}
+        {/* 桌面端平铺全部操作；窄屏点「⋯」后同样平铺，只是整行换到第二排 */}
+        {(!isMobile || moreOpen) && (
+          <div
+            className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${isMobile ? "w-full" : ""}`}
+          >
+            <span className="text-xs text-muted">
+              rev {doc.rev} · {doc.assetCount} 个资源
+            </span>
+            <button
+              type="button"
+              onClick={toggleMargin}
+              aria-pressed={marginMode === "narrow"}
+              title={marginMode === "narrow" ? "切换为正常边距" : "切换为窄边距"}
+              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+            >
+              {/* 文字按钮按约定显示**点击后会发生什么**（目标状态），当前状态由 aria-pressed 表达。
+                  旁边的主题按钮是图标，读作「当前模式」，两者语义不同，不要照搬。 */}
+              {marginMode === "narrow" ? "正常边距" : "窄边距"}
+            </button>
+            <button
+              type="button"
+              onClick={enterImmersive}
+              title="全屏阅读（隐去顶部导航栏）"
+              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+            >
+              全屏
+            </button>
+            <Link
+              to={`/d/${doc.id}/edit`}
+              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+            >
+              编辑
+            </Link>
+            <a
+              href={rawUrl(doc.id)}
+              download={`${doc.title || "document"}.mdex`}
+              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+            >
+              下载
+            </a>
+          </div>
+        )}
       </header>
 
       <div className="relative min-h-0 flex-1">
-        <div ref={paneRef} onScroll={syncPane} className="preview-pane h-full">
+        <div ref={paneRef} onScroll={syncPane} onClick={handlePaneClick} className="preview-pane h-full">
           <MarkdownView source={markdown} resolveAsset={resolveAsset} />
         </div>
         {/* 自绘滚动条覆盖层：与滚动容器平级，不随内容滚动；拖拽逻辑见 startDrag */}
         <div ref={trackRef} className="md-scrollbar" aria-hidden="true" onPointerDown={startDrag}>
           <div ref={thumbRef} className="md-scrollbar-thumb" />
         </div>
-        {/* 沉浸态下的唯一退出入口：顶栏已被隐藏，这个悬浮按钮必须常驻可见 */}
+        {/* 沉浸态的退出入口。放右下角而不是顶部：工具条唤出时也在顶部，会重叠 */}
         {immersive && (
           <button
             type="button"
             onClick={exitImmersive}
             title="退出全屏阅读"
-            className="absolute right-4 top-3 z-30 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-fg shadow-lg transition-colors hover:bg-raised"
+            className="absolute bottom-4 right-4 z-30 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-fg shadow-lg transition-colors hover:bg-raised"
           >
             退出全屏
           </button>

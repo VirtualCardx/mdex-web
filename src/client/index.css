@@ -143,12 +143,11 @@ body {
 }
 
 /*
- * 沉浸式阅读：预览页开关打开时由 PreviewPage 在 <html> 上写 data-immersive="on"，
- * 隐去应用顶栏（.app-chrome）与预览页工具条（.page-chrome），把纵向空间全留给正文。
- * 退出入口是预览页右下角常驻的悬浮按钮，不依赖被隐藏的顶栏。
+ * 沉浸式阅读：只隐去应用顶栏。工具条不在这里隐藏——它有自己的显隐机制
+ * （见下面的 .page-chrome 规则），全屏下也仍需能被唤出来退出全屏。
+ * 退出入口是预览页右下角常驻的悬浮按钮。
  */
-:root[data-immersive="on"] .app-chrome,
-:root[data-immersive="on"] .page-chrome {
+:root[data-immersive="on"] .app-chrome {
   display: none;
 }
 
@@ -161,9 +160,12 @@ body {
 }
 
 /*
- * 手机端阅读时的顶栏处理：预览页工具条改成浮在正文上方的浮层，向下读时滑走、
- * 向上滚或回到顶部时滑回。用 transform 而不是 display，避免显隐时正文整体跳动
- * （浮层不参与布局，正文高度不会变）。data-hidden 由 PreviewPage 的滚动逻辑写。
+ * 手机端阅读时的顶栏处理：预览页工具条改成浮在正文上方的浮层，**默认收起**
+ * （打开文档即是沉浸阅读），点击正文唤出，向下滚动时再自动滑走
+ * （显隐逻辑在 PreviewPage 的 toggleChrome / updateChrome，写 data-hidden）。
+ *
+ * 用 transform 而不是 display：浮层不参与布局，显隐时正文不重排、不丢阅读位置。
+ * 默认态就带 translateY(-100%)，因此首帧不会闪出完整工具条。
  */
 @media (max-width: 767.98px) {
   .page-chrome {
@@ -172,23 +174,17 @@ body {
     left: 0;
     right: 0;
     z-index: 10;
-    transition: transform 180ms ease;
-  }
-
-  .page-chrome[data-hidden="true"] {
     transform: translateY(-100%);
+    transition: transform 180ms ease;
+    /* 半透明加模糊：浮层压在正文上时仍能透出下层的字，减轻遮挡感。
+       不支持 color-mix 的旧内核会丢弃这行，退回 Tailwind 的不透明 bg-panel。 */
+    background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 
-  /*
-   * 正文顶部让出浮层高度，否则第一屏的开头会被压住。浮层高度由 PreviewPage 实测后
-   * 写进 --mobile-chrome-h（沉浸态下浮层 display:none，高度自然是 0）。
-   *
-   * 这条加在滚动容器上而不是 .md-body 上：.md-body 在后面还有一句
-   * `padding: 30px … 40vh` 简写，同优先级下源码靠后的会赢，写在那里会被它覆盖掉。
-   * 编辑页的预览面板同样命中 .preview-pane，但没有 JS 写这个变量，取 0 无影响。
-   */
-  .preview-pane {
-    padding-top: var(--mobile-chrome-h, 0px);
+  .page-chrome[data-hidden="false"] {
+    transform: translateY(0);
   }
 }
 
