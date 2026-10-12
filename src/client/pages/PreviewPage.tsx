@@ -293,7 +293,7 @@ export default function PreviewPage() {
         ref={toolbarRef}
         className="page-chrome flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-2.5"
       >
-        <Link to="/" className="tap-target text-sm text-muted transition-colors hover:text-accent">
+        <Link to="/" className="chrome-btn tap-target text-sm text-soft transition-colors hover:text-accent">
           ← 返回列表
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-heading" title={doc.title}>
@@ -307,15 +307,20 @@ export default function PreviewPage() {
             aria-expanded={moreOpen}
             aria-label="更多操作"
             title="更多操作"
-            className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+            className="chrome-btn tap-target flex items-center justify-center rounded-md border border-line px-3 py-1.5 text-fg transition-colors hover:bg-raised"
           >
-            ⋯
+            {/* 用 SVG 而不是「⋯」字符：后者在不同字体下的字重/基线差异明显，撑不满触控区 */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <circle cx="3" cy="8" r="1.5" />
+              <circle cx="8" cy="8" r="1.5" />
+              <circle cx="13" cy="8" r="1.5" />
+            </svg>
           </button>
         )}
         {/* 桌面端平铺全部操作；窄屏点「⋯」后同样平铺，只是整行换到第二排 */}
         {(!isMobile || moreOpen) && (
           <div
-            className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${isMobile ? "w-full" : ""}`}
+            className={`chrome-more flex flex-wrap items-center gap-x-3 gap-y-2 ${isMobile ? "w-full" : ""}`}
           >
             <span className="text-xs text-muted">
               rev {doc.rev} · {doc.assetCount} 个资源
@@ -325,7 +330,7 @@ export default function PreviewPage() {
               onClick={toggleMargin}
               aria-pressed={marginMode === "narrow"}
               title={marginMode === "narrow" ? "切换为正常边距" : "切换为窄边距"}
-              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+              className="chrome-btn tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
             >
               {/* 文字按钮按约定显示**点击后会发生什么**（目标状态），当前状态由 aria-pressed 表达。
                   旁边的主题按钮是图标，读作「当前模式」，两者语义不同，不要照搬。 */}
@@ -335,20 +340,20 @@ export default function PreviewPage() {
               type="button"
               onClick={enterImmersive}
               title="全屏阅读（隐去顶部导航栏）"
-              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+              className="chrome-btn tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
             >
               全屏
             </button>
             <Link
               to={`/d/${doc.id}/edit`}
-              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+              className="chrome-btn tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
             >
               编辑
             </Link>
             <a
               href={rawUrl(doc.id)}
               download={`${doc.title || "document"}.mdex`}
-              className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+              className="chrome-btn tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
             >
               下载
             </a>

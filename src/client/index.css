@@ -175,16 +175,70 @@ body {
     right: 0;
     z-index: 10;
     transform: translateY(-100%);
-    transition: transform 180ms ease;
-    /* 半透明加模糊：浮层压在正文上时仍能透出下层的字，减轻遮挡感。
+    /* iOS 风格的缓出曲线：滑入滑出比线性自然，不会「啪」地弹到位 */
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+    /* 半透明加较强模糊：浮层压在正文上时仍透出下层的字，减轻遮挡感。
        不支持 color-mix 的旧内核会丢弃这行，退回 Tailwind 的不透明 bg-panel。 */
-    background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    /* 下缘圆角加投影，让它明确读作「浮层」而不是页面顶部的一截。
+       同色的 1px 描边在模糊底上会被糊掉，改用阴影做分离（保留 border 占位，不改高度）。
+       圆角取 12px 与页面其他圆角控件同一档，阴影压得较浅以免下缘发暗。 */
+    border-bottom-color: transparent;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 12px 28px -16px rgb(0 0 0 / 0.5);
   }
 
   .page-chrome[data-hidden="false"] {
     transform: translateY(0);
+  }
+
+  /* 主行的导航项用全 ghost：把描边透明化而不是删掉边框，布局尺寸不变、只改观感 */
+  .page-chrome .chrome-btn {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .page-chrome .chrome-btn:hover {
+    background: var(--bg-raised);
+  }
+
+  /* 触屏没有 hover，按压反馈靠 :active */
+  .page-chrome .chrome-btn:active {
+    background: var(--accent-soft);
+  }
+
+  /*
+   * 展开出来的操作另给一层极轻底色。全 ghost 会让它们整排退化成纯文字、
+   * 可点性变弱——它们和主行的「返回 / ⋯」性质不同，这里需要明显读作按钮。
+   */
+  .page-chrome .chrome-more .chrome-btn {
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  .page-chrome .chrome-more .chrome-btn:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  /* 两行之间给一条极淡的分隔，只靠间距会显得挤在一起 */
+  .page-chrome .chrome-more {
+    border-top: 1px solid rgb(255 255 255 / 0.06);
+    padding-top: 8px;
+    /* 展开次要操作时给一点入场，避免整排凭空跳出 */
+    animation: chrome-more-in 180ms ease-out both;
+  }
+}
+
+@keyframes chrome-more-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
