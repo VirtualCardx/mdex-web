@@ -9,7 +9,7 @@
  * - 未保存拦截：`useBlocker`（站内跳转）+ `beforeunload`（关标签页）+ `Ctrl/Cmd+S` 保存。
  */
 
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useBlocker, useNavigate, useParams } from "react-router-dom";
 import { openSearchPanel } from "@codemirror/search";
 import type { EditorView } from "@codemirror/view";
@@ -20,6 +20,7 @@ import type { MdexArchive } from "../../shared/types";
 import { ApiError, errorMessage, fetchRaw, getDoc, updateDoc } from "../lib/api";
 import { AssetStore } from "../lib/assetStore";
 import { insertImageRef, runFormatAction } from "../lib/actions";
+import { useIsMobile } from "../lib/useMediaQuery";
 import AssetPanel from "../components/AssetPanel";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Editor, { type CursorInfo } from "../components/Editor";
@@ -33,6 +34,15 @@ const MAX_EDIT_ASSET_BYTES = 64 * 1024 * 1024;
 
 type LoadState = "loading" | "ready" | "error" | "too-large";
 type SavingState = "idle" | "saving" | "error";
+
+/** 窄屏下的单栏标签页。桌面端不用这个，直接并排。 */
+type MobileTab = "edit" | "preview" | "assets";
+
+const MOBILE_TABS: { id: MobileTab; label: string }[] = [
+  { id: "edit", label: "编辑" },
+  { id: "preview", label: "预览" },
+  { id: "assets", label: "资源" },
+];
 
 function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -49,6 +59,28 @@ function extensionOf(key: string): string {
 
 function basename(key: string): string {
   return key.slice(key.lastIndexOf("/") + 1);
+}
+
+/** 文件名没带扩展名时（部分手机相机/截图），退回从 MIME 推断。 */
+function extensionFromMime(mime: string): string {
+  const slash = mime.indexOf("/");
+  if (slash < 0) return "";
+  const sub = mime.slice(slash + 1).toLowerCase();
+  return sub === "jpeg" ? "jpg" : sub;
+}
+
+/** 读成 base64（剥掉 `data:...;base64,` 前缀），与粘贴图片共用同一条落库路径。 */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = typeof reader.result === "string" ? reader.result : "";
+      const comma = url.indexOf(",");
+      resolve(comma < 0 ? "" : url.slice(comma + 1));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function EditPage() {
@@ -69,12 +101,15 @@ export default function EditPage() {
   const [cursor, setCursor] = useState<CursorInfo>({ ln: 1, col: 1 });
   const [conflict, setConflict] = useState(false);
   const [showAssets, setShowAssets] = useState(true);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("edit");
   const [reloadKey, setReloadKey] = useState(0);
+  const isMobile = useIsMobile();
 
   const archiveRef = useRef<MdexArchive | null>(null);
   const storeRef = useRef<AssetStore | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const dirty = markdown !== savedMarkdown || dirtyAssets.size > 0;
 
@@ -258,10 +293,45 @@ export default function EditPage() {
     [markAssetsChanged, toast],
   );
 
-  const handleInsertAsset = useCallback((key: string) => {
-    const view = viewRef.current;
-    if (view) insertImageRef(view, key, basename(key));
-  }, []);
+  const handleInsertAsset = useCallback(
+    (key: string) => {
+      const view = viewRef.current;
+      if (view) insertImageRef(view, key, basename(key));
+      // 窄屏下编辑器可能正被「资源」标签挡着，不切回去用户会以为插入没生效
+      if (isMobile) setMobileTab("edit");
+    },
+    [isMobile],
+  );
+
+  /** 打开系统选图（手机上即相册/拍照）。 */
+  const pickImage = useCallback(() => fileInputRef.current?.click(), []);
+
+  const handleImageFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // 清空 value：否则连续选同一张图片不会再触发 change
+      event.target.value = "";
+      if (!file) return;
+      try {
+        const base64 = await fileToBase64(file);
+        const ext = extensionOf(file.name) || extensionFromMime(file.type);
+        if (!ext) {
+          toast("无法识别图片格式", "error");
+          return;
+        }
+        const key = await handlePasteImage(base64, ext);
+        if (key) handleInsertAsset(key);
+      } catch (err) {
+        toast(errorMessage(err), "error");
+      }
+    },
+    [handleInsertAsset, handlePasteImage, toast],
+  );
+
+  // 编辑器在被 display:none 隐藏期间无法测量，恢复可见时让它重新量一次
+  useEffect(() => {
+    if (isMobile && mobileTab === "edit") viewRef.current?.requestMeasure();
+  }, [isMobile, mobileTab]);
 
   const handleRenameAsset = useCallback(
     (key: string, nextName: string) => {
@@ -345,13 +415,48 @@ export default function EditPage() {
   const savingLabel =
     saving === "saving" ? "保存中…" : saving === "error" ? "保存失败" : dirty ? "未保存" : "已保存";
 
+  // 三个面板只在这里构造一次，由下面「窄屏标签页」或「桌面分屏」分支择一使用。
+  // 窄屏必须靠 CSS 隐藏而非条件渲染：条件渲染会重建 CodeMirror，丢掉撤销历史、
+  // 光标与滚动位置。AssetPanel 的 fullWidth 也据此切换（侧栏 ↔ 独立标签页）。
+  const editorPane = (
+    <Editor
+      key={id}
+      initialDoc={markdown}
+      onChange={setMarkdown}
+      onCursor={setCursor}
+      onScrollRatio={(ratio) => {
+        const el = previewRef.current;
+        if (!el) return;
+        const max = el.scrollHeight - el.clientHeight;
+        if (max > 0) el.scrollTop = ratio * max;
+      }}
+      onView={(view) => {
+        viewRef.current = view;
+      }}
+      onPasteImage={handlePasteImage}
+    />
+  );
+  const previewPane = (
+    <MarkdownView source={deferredMarkdown} resolveAsset={resolveAsset} assetVersion={assetVersion} />
+  );
+  const assetPane = (
+    <AssetPanel
+      keys={assetKeys}
+      url={resolveAsset}
+      onInsert={handleInsertAsset}
+      onRename={handleRenameAsset}
+      onDelete={handleDeleteAsset}
+      fullWidth={isMobile}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="text-sm text-muted transition-colors hover:text-accent"
+          className="tap-target text-sm text-muted transition-colors hover:text-accent"
         >
           ← 返回列表
         </button>
@@ -362,76 +467,109 @@ export default function EditPage() {
           {savingLabel}
           {lastSavedAt ? ` · ${lastSavedAt.toLocaleTimeString("zh-CN")}` : ""}
         </span>
-        <button
-          type="button"
-          onClick={() => setShowAssets((value) => !value)}
-          className="rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
-        >
-          {showAssets ? "隐藏资源" : "显示资源"}
-        </button>
+        {/* 窄屏下资源是独立标签页，不需要这个开关 */}
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={() => setShowAssets((value) => !value)}
+            className="tap-target rounded-md border border-line px-3 py-1.5 text-xs text-fg transition-colors hover:bg-raised"
+          >
+            {showAssets ? "隐藏资源" : "显示资源"}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void save()}
           disabled={saving === "saving"}
-          className="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/85 disabled:opacity-40"
+          className="tap-target rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/85 disabled:opacity-40"
         >
           {saving === "saving" ? "保存中…" : "保存 (Ctrl+S)"}
         </button>
       </header>
 
-      <Toolbar onAction={(action) => {
-        const view = viewRef.current;
-        if (!view) return;
-        // 查找不是文本变换，走 CodeMirror 自己的面板
-        if (action === "find") {
-          openSearchPanel(view);
-          return;
-        }
-        runFormatAction(view, action);
-      }} />
+      {isMobile && (
+        <div
+          role="tablist"
+          aria-label="编辑视图"
+          className="flex gap-1 border-b border-line bg-panel px-2 py-1.5"
+        >
+          {MOBILE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === tab.id}
+              onClick={() => setMobileTab(tab.id)}
+              className={`tap-target flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                mobileTab === tab.id ? "bg-raised text-accent" : "text-muted hover:bg-raised"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <div className="flex min-h-0 flex-1">
-        <SplitPane
-          left={
-            <div className="editor-pane h-full bg-bg">
-              <Editor
-                key={id}
-                initialDoc={markdown}
-                onChange={setMarkdown}
-                onCursor={setCursor}
-                onScrollRatio={(ratio) => {
-                  const el = previewRef.current;
-                  if (!el) return;
-                  const max = el.scrollHeight - el.clientHeight;
-                  if (max > 0) el.scrollTop = ratio * max;
-                }}
-                onView={(view) => {
-                  viewRef.current = view;
-                }}
-                onPasteImage={handlePasteImage}
-              />
-            </div>
-          }
-          right={
-            <div ref={previewRef} className="preview-pane h-full">
-              <MarkdownView
-                source={deferredMarkdown}
-                resolveAsset={resolveAsset}
-                assetVersion={assetVersion}
-              />
-            </div>
-          }
+      {/* 格式工具栏只作用于编辑器，窄屏的预览/资源标签页下收起来 */}
+      {(!isMobile || mobileTab === "edit") && (
+        <Toolbar
+          onAction={(action) => {
+            // 「图片」走文件选择器，不需要 EditorView
+            if (action === "image") {
+              pickImage();
+              return;
+            }
+            const view = viewRef.current;
+            if (!view) return;
+            // 查找不是文本变换，走 CodeMirror 自己的面板
+            if (action === "find") {
+              openSearchPanel(view);
+              return;
+            }
+            runFormatAction(view, action);
+          }}
         />
-        {showAssets && (
-          <AssetPanel
-            keys={assetKeys}
-            url={resolveAsset}
-            onInsert={handleInsertAsset}
-            onRename={handleRenameAsset}
-            onDelete={handleDeleteAsset}
+      )}
+
+      {isMobile ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div
+            className={`editor-pane min-h-0 flex-1 bg-bg ${mobileTab === "edit" ? "" : "hidden"}`}
+          >
+            {editorPane}
+          </div>
+          <div
+            ref={previewRef}
+            className={`preview-pane min-h-0 flex-1 ${mobileTab === "preview" ? "" : "hidden"}`}
+          >
+            {previewPane}
+          </div>
+          <div className={`flex min-h-0 flex-1 ${mobileTab === "assets" ? "" : "hidden"}`}>
+            {assetPane}
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          <SplitPane
+            left={<div className="editor-pane h-full bg-bg">{editorPane}</div>}
+            right={
+              <div ref={previewRef} className="preview-pane h-full">
+                {previewPane}
+              </div>
+            }
           />
-        )}
-      </div>
+          {showAssets && assetPane}
+        </div>
+      )}
+
+      {/* 「图片」按钮的落点：手机上会唤起系统相册/拍照 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => void handleImageFile(event)}
+      />
 
       <footer className="flex flex-wrap items-center gap-4 border-t border-line bg-panel px-4 py-1.5 text-xs text-muted">
         <span>

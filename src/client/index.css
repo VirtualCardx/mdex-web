@@ -23,6 +23,9 @@
   /* 预览正文的左右边距，由 <html data-margin> 切换（见 lib/marginPref.ts） */
   --md-body-max-width: 840px;
   --md-body-padding-x: 40px;
+  /* 编辑器字号。用变量而不是直接覆盖 .cm-editor：CodeMirror 主题样式由 JS 注入，
+     硬覆盖要拼特异性，容易随其实现变化而失效。窄屏下提到 16px（见文件末尾媒体查询）。 */
+  --editor-font-size: 14.5px;
   color-scheme: dark;
 }
 
@@ -63,6 +66,28 @@
 
   :root[data-margin="narrow"] {
     --md-body-padding-x: 12px;
+  }
+}
+
+/*
+ * 窄屏（手机 / 小屏）适配。断点 768px 与 lib/useMediaQuery.ts 的 MOBILE_QUERY 一致：
+ * 手机横屏可达 ~840px，而编辑页的分屏 + 240px 资源面板在 900px 以下都很挤。
+ * 与上面那条 640px 查询无关——那条只管正文左右留白。
+ */
+@media (max-width: 767.98px) {
+  /* iOS Safari 会对字号小于 16px 的输入区域自动放大整页，编辑器必须达到 16px */
+  :root {
+    --editor-font-size: 16px;
+  }
+
+  /*
+   * 手指可点：把交互控件撑到 ≥44px（iOS HIG / WCAG 2.5.5 的建议值）。
+   * 本规则没有放在任何 @layer 里，而未分层的规则优先于 @layer utilities，
+   * 因此能稳定压过 Tailwind 的 h-7 / min-w-7 等工具类。
+   */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 

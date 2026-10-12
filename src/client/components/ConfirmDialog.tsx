@@ -65,7 +65,7 @@ export default function ConfirmDialog({
               type="button"
               disabled={busy}
               onClick={onExtra}
-              className="rounded-md border border-line px-3 py-1.5 text-sm text-fg transition-colors hover:bg-raised disabled:opacity-40"
+              className="tap-target rounded-md border border-line px-3 py-1.5 text-sm text-fg transition-colors hover:bg-raised disabled:opacity-40"
             >
               {extraLabel}
             </button>
@@ -74,7 +74,7 @@ export default function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="rounded-md border border-line px-3 py-1.5 text-sm text-fg transition-colors hover:bg-raised disabled:opacity-40"
+            className="tap-target rounded-md border border-line px-3 py-1.5 text-sm text-fg transition-colors hover:bg-raised disabled:opacity-40"
           >
             {cancelLabel}
           </button>
@@ -82,7 +82,7 @@ export default function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-40 ${
+            className={`tap-target rounded-md px-3 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-40 ${
               danger ? "bg-red-600 hover:bg-red-500" : "bg-accent hover:bg-accent/85"
             }`}
           >

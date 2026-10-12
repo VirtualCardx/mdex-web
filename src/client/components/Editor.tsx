@@ -37,7 +37,7 @@ export interface EditorProps {
 const editorTheme = EditorView.theme({
   "&": {
     height: "100%",
-    fontSize: "14.5px",
+    fontSize: "var(--editor-font-size, 14.5px)",
     backgroundColor: "transparent",
     color: "var(--fg)",
   },

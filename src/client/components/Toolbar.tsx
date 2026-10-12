@@ -45,9 +45,20 @@ export default function Toolbar({ onAction, disabled = false }: ToolbarProps) {
         disabled={disabled}
         title="查找 / 替换（Ctrl+F）"
         onClick={() => onAction("find")}
-        className="h-7 min-w-7 rounded-md px-2 text-xs font-medium text-fg transition-colors hover:bg-raised active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
+        className="tap-target h-7 min-w-7 rounded-md px-2 text-xs font-medium text-fg transition-colors hover:bg-raised active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
       >
         查找
+      </button>
+      {/* 同上，「图片」也不是文本变换：它要走文件选择器，逻辑在 EditPage。
+          手机上没有 Ctrl+V、相册照片也不经剪贴板，这个按钮是移动端插图的主要入口。 */}
+      <button
+        type="button"
+        disabled={disabled}
+        title="插入图片（从相册或文件选择）"
+        onClick={() => onAction("image")}
+        className="tap-target h-7 min-w-7 rounded-md px-2 text-xs font-medium text-fg transition-colors hover:bg-raised active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        图片
       </button>
       <span className="mx-1.5 h-5 w-px bg-line" aria-hidden="true" />
 
@@ -61,7 +72,7 @@ export default function Toolbar({ onAction, disabled = false }: ToolbarProps) {
             disabled={disabled}
             title={button.title}
             onClick={() => onAction(button.id)}
-            className={`h-7 min-w-7 rounded-md px-2 text-xs font-medium text-fg transition-colors hover:bg-raised active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40 ${button.className ?? ""}`}
+            className={`tap-target h-7 min-w-7 rounded-md px-2 text-xs font-medium text-fg transition-colors hover:bg-raised active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40 ${button.className ?? ""}`}
           >
             {button.label}
           </button>
