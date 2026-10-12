@@ -293,7 +293,7 @@ export default function PreviewPage() {
         ref={toolbarRef}
         className="page-chrome flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-2.5"
       >
-        <Link to="/" className="chrome-btn tap-target text-sm text-soft transition-colors hover:text-accent">
+        <Link to="/" className="chrome-btn tap-target text-sm text-muted transition-colors hover:text-accent">
           ← 返回列表
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-heading" title={doc.title}>
@@ -307,13 +307,13 @@ export default function PreviewPage() {
             aria-expanded={moreOpen}
             aria-label="更多操作"
             title="更多操作"
-            className="chrome-btn tap-target flex items-center justify-center rounded-md border border-line px-3 py-1.5 text-fg transition-colors hover:bg-raised"
+            className="chrome-btn tap-target rounded-md border border-line text-fg transition-colors hover:bg-raised"
           >
-            {/* 用 SVG 而不是「⋯」字符：后者在不同字体下的字重/基线差异明显，撑不满触控区 */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <circle cx="3" cy="8" r="1.5" />
-              <circle cx="8" cy="8" r="1.5" />
-              <circle cx="13" cy="8" r="1.5" />
+            {/* 「⋯」字符在不同字体下字重/基线差异明显、撑不满触控区；SVG 三点居中且稳定 */}
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+              <circle cx="4" cy="9" r="1.6" />
+              <circle cx="9" cy="9" r="1.6" />
+              <circle cx="14" cy="9" r="1.6" />
             </svg>
           </button>
         )}
@@ -375,7 +375,7 @@ export default function PreviewPage() {
             type="button"
             onClick={exitImmersive}
             title="退出全屏阅读"
-            className="absolute bottom-4 right-4 z-30 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-fg shadow-lg transition-colors hover:bg-raised"
+            className="tap-target absolute bottom-4 right-4 z-30 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-fg shadow-lg transition-colors hover:bg-raised"
           >
             退出全屏
           </button>

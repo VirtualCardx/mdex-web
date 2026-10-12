@@ -84,8 +84,15 @@
    * 手指可点：把交互控件撑到 ≥44px（iOS HIG / WCAG 2.5.5 的建议值）。
    * 本规则没有放在任何 @layer 里，而未分层的规则优先于 @layer utilities，
    * 因此能稳定压过 Tailwind 的 h-7 / min-w-7 等工具类。
+   *
+   * display/align/justify 不可省：min-height 只把盒子撑高、不管内容位置，
+   * <a>（在 flex 容器里被块化为 block）里的文字会顶在上面，而 <button> 靠
+   * UA 样式自居中——两种元素并排时高矮齐了、文字却一上一下。
    */
   .tap-target {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 44px;
     min-width: 44px;
   }
@@ -175,26 +182,22 @@ body {
     right: 0;
     z-index: 10;
     transform: translateY(-100%);
-    /* iOS 风格的缓出曲线：滑入滑出比线性自然，不会「啪」地弹到位 */
-    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
-    /* 半透明加较强模糊：浮层压在正文上时仍透出下层的字，减轻遮挡感。
+    transition: transform 180ms ease;
+    /* 半透明加模糊：浮层压在正文上时仍能透出下层的字，减轻遮挡感。
        不支持 color-mix 的旧内核会丢弃这行，退回 Tailwind 的不透明 bg-panel。 */
-    background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    /* 下缘圆角加投影，让它明确读作「浮层」而不是页面顶部的一截。
-       同色的 1px 描边在模糊底上会被糊掉，改用阴影做分离（保留 border 占位，不改高度）。
-       圆角取 12px 与页面其他圆角控件同一档，阴影压得较浅以免下缘发暗。 */
-    border-bottom-color: transparent;
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 12px 28px -16px rgb(0 0 0 / 0.5);
+    background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 
   .page-chrome[data-hidden="false"] {
     transform: translateY(0);
   }
 
-  /* 主行的导航项用全 ghost：把描边透明化而不是删掉边框，布局尺寸不变、只改观感 */
+  /*
+   * 按钮分两层。主行导航（返回 / ⋯）做全 ghost：描边透明化而不是删边框，
+   * 布局尺寸不变、只改观感；触屏没有 hover，按压反馈由 :active 提供。
+   */
   .page-chrome .chrome-btn {
     border-color: transparent;
     background: transparent;
@@ -204,41 +207,28 @@ body {
     background: var(--bg-raised);
   }
 
-  /* 触屏没有 hover，按压反馈靠 :active */
   .page-chrome .chrome-btn:active {
     background: var(--accent-soft);
   }
 
   /*
-   * 展开出来的操作另给一层极轻底色。全 ghost 会让它们整排退化成纯文字、
-   * 可点性变弱——它们和主行的「返回 / ⋯」性质不同，这里需要明显读作按钮。
+   * 点「⋯」展开的次要操作另给一层淡底：整排全 ghost 会退化成纯文字、
+   * 可点性变弱，它们和导航性质不同，需要明显读作按钮。
+   * 填充用 --bg-raised 令牌（明暗主题各有实色值），不用 color-mix——
+   * 部分国产内核对 color-mix 的支持不完整，渲染会发脏。
    */
   .page-chrome .chrome-more .chrome-btn {
-    background: rgb(255 255 255 / 0.06);
+    background: var(--bg-raised);
   }
 
   .page-chrome .chrome-more .chrome-btn:hover {
-    background: rgb(255 255 255 / 0.12);
+    background: var(--accent-soft);
   }
 
-  /* 两行之间给一条极淡的分隔，只靠间距会显得挤在一起 */
+  /* 主行与次要行之间一条淡分隔，只靠间距两行会挤在一起 */
   .page-chrome .chrome-more {
-    border-top: 1px solid rgb(255 255 255 / 0.06);
+    border-top: 1px solid var(--border);
     padding-top: 8px;
-    /* 展开次要操作时给一点入场，避免整排凭空跳出 */
-    animation: chrome-more-in 180ms ease-out both;
-  }
-}
-
-@keyframes chrome-more-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 
